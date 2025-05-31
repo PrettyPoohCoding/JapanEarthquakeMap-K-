@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>일본 지진 리포트</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Google Font (Roboto) -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Roboto', sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background-color: #f2f4f8;
+    }
+
+    header {
+      background: linear-gradient(120deg, #0077cc, #00aaff);
+      color: white;
+      text-align: center;
+      padding: 20px 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    header img {
+      width: 40px;
+      vertical-align: middle;
+      margin-right: 10px;
+    }
+
+    header h1 {
+      display: inline-block;
+      font-size: 24px;
+      margin: 0;
+      vertical-align: middle;
+    }
+
+    #controls {
+      background: white;
+      padding: 15px;
+      text-align: center;
+      border-bottom: 1px solid #ccc;
+    }
+
+    #controls label {
+      font-weight: bold;
+      margin-right: 10px;
+    }
+
+    #controls input[type="date"] {
+      padding: 6px 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+
+    #controls button {
+      padding: 6px 14px;
+      font-size: 16px;
+      margin-left: 10px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    #controls button:hover {
+      background-color: #0056b3;
+    }
+
+    #map {
+      height: 85vh;
+      width: 100%;
+    }
+
+    @media (max-width: 600px) {
+      header h1 {
+        font-size: 20px;
+      }
+
+      #controls input[type="date"],
+      #controls button {
+        width: 90%;
+        margin-top: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 상단 헤더 -->
+  <header>
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Earthquake_icon.svg/1024px-Earthquake_icon.svg.png" alt="지진 아이콘">
+    <h1>일본 지진 리포트</h1>
+  </header>
+
+  <!-- 날짜 선택 컨트롤 -->
+  <div id="controls">
+    <label for="dateInput">지진 날짜 선택:</label>
+    <input type="date" id="dateInput" min="2010-01-01">
+    <button onclick="loadEarthquakeData()">불러오기</button>
+  </div>
+
+  <!-- 지도 -->
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    const map = L.map('map').setView([36.2048, 138.2529], 5);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 10,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let markers = [];
+
+    function clearMarkers() {
+      markers.forEach(marker => map.removeLayer(marker));
+      markers = [];
+    }
+
+    function formatDate(date) {
+      return date.toISOString().split('T')[0];
+    }
+
+    function fetchEarthquakeData(startTime, endTime) {
+      clearMarkers();
+
+      const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${startTime}&endtime=${endTime}`;
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          let count = 0;
+          data.features.forEach(eq => {
+            const [lon, lat] = eq.geometry.coordinates;
+            const mag = eq.properties.mag;
+            const place = eq.properties.place;
+            const time = new Date(eq.properties.time);
+
+            if (lat >= 24 && lat <= 46 && lon >= 122 && lon <= 150) {
+              const marker = L.marker([lat, lon]).addTo(map);
+              marker.bindPopup(`
+                <b>위치:</b> ${place}<br/>
+                <b>규모:</b> ${mag}<br/>
+                <b>시간:</b> ${time.toLocaleString()}
+              `);
+              markers.push(marker);
+              count++;
+            }
+          });
+
+          if (count === 0) {
+            alert("해당 날짜에 일본에서 발생한 지진 정보가 없습니다.");
+          }
+        })
+        .catch(error => {
+          console.error("지진 데이터 로딩 오류:", error);
+          alert("데이터를 불러오는 데 실패했습니다.");
+        });
+    }
+
+    function loadEarthquakeData() {
+      const input = document.getElementById("dateInput");
+      const dateStr = input.value;
+      if (!dateStr) {
+        alert("날짜를 선택해주세요.");
+        return;
+      }
+
+      const selectedDate = new Date(dateStr);
+      const now = new Date();
+
+      if (selectedDate > now) {
+        alert("미래 날짜는 선택할 수 없습니다.");
+        return;
+      }
+
+      const startTime = formatDate(selectedDate);
+      const endTime = formatDate(new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000));
+
+      fetchEarthquakeData(startTime, endTime);
+    }
+
+    // 실행 시 오늘 날짜 지진 자동 표시
+    window.onload = () => {
+      const today = new Date();
+      const formatted = formatDate(today);
+      document.getElementById("dateInput").value = formatted;
+      document.getElementById("dateInput").max = formatted;
+
+      const end = formatDate(new Date(today.getTime() + 24 * 60 * 60 * 1000));
+      fetchEarthquakeData(formatted, end);
+    };
+  </script>
+
+</body>
+</html>
